@@ -21,9 +21,11 @@ import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
 import org.opencv.core.Rect2d;
+import org.opencv.core.RotatedRect;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.tracking.TrackerMIL;
@@ -288,6 +290,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         // Grab camera frame in gray format
         mGray = inputFrame.gray();
         // Action based on tracking flag
+
         if(tracking_flag == -1){
             // Update myROI to keep the window to the center
             myROI.x = myWidth / 2 - myROIWidth / 2;
@@ -345,20 +348,21 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
             if (!TrackingSuccess){
                 Imgproc.putText(mRgba,"Tracking Failure", new Point(50,50), Core.FONT_HERSHEY_PLAIN, 2, new Scalar(255,0,0));
             }
-            Imgproc.circle(mRgba, new Point(200, 150),5 , new Scalar(0,255,0), 2);
-            Imgproc.circle(mRgba, new Point(200, 350),5 , new Scalar(0,255,0), 2);
-            Imgproc.circle(mRgba, new Point(200, 550),5 , new Scalar(0,255,0), 2);
-            Imgproc.circle(mRgba, new Point(500, 150),5 , new Scalar(0,255,0), 2);
-            Imgproc.circle(mRgba, new Point(500, 350),5 , new Scalar(0,255,0), 2);
-            Imgproc.circle(mRgba, new Point(500, 550),5 , new Scalar(0,255,0), 2);
-            Imgproc.circle(mRgba, new Point(800, 150),5 , new Scalar(0,255,0), 2);
-            Imgproc.circle(mRgba, new Point(800, 350),5 , new Scalar(0,255,0), 2);
-            Imgproc.circle(mRgba, new Point(800, 550),5 , new Scalar(0,255,0), 2);
-            Imgproc.circle(mRgba, new Point(1100, 150),5 , new Scalar(0,255,0), 2);
-            Imgproc.circle(mRgba, new Point(1100, 350),5 , new Scalar(0,255,0), 2);
-            Imgproc.circle(mRgba, new Point(1100, 550),5 , new Scalar(0,255,0), 2);
+//            Imgproc.circle(mRgba, new Point(200, 150),5 , new Scalar(0,255,0), 2);
+//            Imgproc.circle(mRgba, new Point(200, 350),5 , new Scalar(0,255,0), 2);
+//            Imgproc.circle(mRgba, new Point(200, 550),5 , new Scalar(0,255,0), 2);
+//            Imgproc.circle(mRgba, new Point(500, 150),5 , new Scalar(0,255,0), 2);
+//            Imgproc.circle(mRgba, new Point(500, 350),5 , new Scalar(0,255,0), 2);
+//            Imgproc.circle(mRgba, new Point(500, 550),5 , new Scalar(0,255,0), 2);
+//            Imgproc.circle(mRgba, new Point(800, 150),5 , new Scalar(0,255,0), 2);
+//            Imgproc.circle(mRgba, new Point(800, 350),5 , new Scalar(0,255,0), 2);
+//            Imgproc.circle(mRgba, new Point(800, 550),5 , new Scalar(0,255,0), 2);
+//            Imgproc.circle(mRgba, new Point(1100, 150),5 , new Scalar(0,255,0), 2);
+//            Imgproc.circle(mRgba, new Point(1100, 350),5 , new Scalar(0,255,0), 2);
+//            Imgproc.circle(mRgba, new Point(1100, 550),5 , new Scalar(0,255,0), 2);
             Point cornerPoint = eyeCorner(mGray, 0.30, myROI, true);
             Imgproc.circle(mRgba, cornerPoint, 4, new Scalar (0,255,0));
+            irisCenter(mGray, mRgba, 0.30, myROI, 50,50, 8, true);
             // ******************** END YOUR CODE HERE ******************** //
         }
 
@@ -370,6 +374,11 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                 );
 
         // Returned frame will be displayed on the screen
+
+//        Mat tmp = new Mat();
+//        Mat ret = new Mat();
+//        Imgproc.Sobel(mGray, tmp, -1, 1, 0);
+//        Core.absdiff(tmp, Scalar.all(0), ret);
         return mRgba;
     }
     // helper function
@@ -401,5 +410,85 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         Core.MinMaxLocResult cornerAns = minMaxLoc(conved, null);
         Log.d( Double.toString(cornerAns.maxVal), "max val in c");
         return new Point (cornerAns.maxLoc.x + ROI_.x + ROI_.width - roiNewWidth, cornerAns.maxLoc.y + ROI_.y );
+    }
+//    //
+//    public double[] BinCount(double[] arr){
+//        Core.MinMaxLocResult res = Core.minMaxLoc(arr);
+//        double max = res.maxVal;
+//        int h[] = new int[max+1];
+//        for(int i=0; i<arr.length; i++){
+//            h[arr[i]] += 1;
+//        }
+//        return h;
+//    }
+//
+//    // debubble function
+//    // remove noise
+//    public MatOfPoint2d debubble (Point[] postiveEdge, Point[] negativeEdge, int win, boolean isLeft){
+//        double[] countPos = BinCount(postiveEdge.x);
+//        Core.MinMaxLocationResult temp = Core.MinMaxLocationResult(countPos);
+//        int postiveEdgeMode = temp.maxLoc;
+//
+//        int[] countNeg = BinCount(negativeEdge.x);
+//        Core.MinMaxLocationResult temp = Core.MinMaxLocationResult(countNeg);
+//        int negativeEdgeMode = temp.maxLoc;
+//
+//        boolean[] truthArrayPostive = new boolean[postiveEdge.x.length]
+//        boolean[] truthArrayNegative = new boolean[negativeEdge.x.length]
+//
+//        for (int i=0; i<postiveEdge.x.length; i++){
+//            if ((postiveEdge.x[i] < postiveEdgeMode + win) && (postiveEdge.x[i] > postiveEdgeMode - win)){
+//                truthArrayPostive[i] = true;
+//            }
+//        }
+//
+//        for (int j=0; j<negativeEdge.x.length; j++){
+//            if((negativeEdge.x[i] < negativeEdgeMode + win) && (negativeEdge.x[i] > negativeEdgeMode - win)){
+//                truthArrayNegative[i] = true;
+//            }
+//        }
+//
+//    }
+//    //
+//    private MatOfPoint2f debbule(double[] positiveXEdge, double[] positiveYEdge, double[] negativeXEdge, double[] negativeYEdge,int win, boolean isLeft){
+//
+//        return new MatOfPoint2f();
+//    }
+    private Mat irisCenter(Mat mGray_, Mat mRgba_, double ratio, Rect2d ROI_, int negSampleNum, int posSampleNum, int win, boolean isLeft){
+        int roiNewWidth = (int) (ROI_.width * (1 - ratio));
+        Rect irisRoi = new Rect((int) (ROI_.x), (int) ROI_.y, roiNewWidth, (int) ROI_.height);
+        Mat irisImg = new Mat(mGray_, irisRoi); // reference to subarray
+        Mat sobelImg = new Mat();
+        Imgproc.Sobel(irisImg, sobelImg, -1, 1, 0);
+        // local array of Points of negativeEdge and positiveEdge
+        double[] negativeXEdge = new double[negSampleNum];
+        double[] negativeYEdge = new double[negSampleNum];
+        double[] positiveXEdge = new double[posSampleNum];
+        double[] positiveYEdge = new double[posSampleNum];
+
+        // populate these array
+        for (int i = 0; i < negSampleNum; i++){
+            // bad run time
+            Core.MinMaxLocResult tmp = minMaxLoc(sobelImg, null);
+            sobelImg.put( (int) tmp.minLoc.y, (int) tmp.minLoc.x, 0); // 0 cannot be max or min
+            negativeXEdge[i] = tmp.minLoc.x;
+            negativeYEdge[i] = tmp.minLoc.y;
+            //Log.d(Double.toString(tmp.minLoc.x), "minLoc.x in sobelImg");
+        }
+        for (int j = 0; j < posSampleNum; j++){
+            Core.MinMaxLocResult tmp = minMaxLoc(sobelImg, null);
+            Log.d(Double.toString(tmp.maxVal), "maxVal in sobelImg");
+            sobelImg.put( (int) tmp.maxLoc.y, (int) tmp.maxLoc.x, 0); // 0 cannot be max or min
+            positiveXEdge[j] = tmp.maxLoc.x;
+            positiveYEdge[j] = tmp.maxLoc.y;
+            Imgproc.circle(mRgba_, new Point(tmp.maxLoc.x + ROI_.x,tmp.maxLoc.y + ROI_.y), 2, new Scalar(0,0,255));
+        }
+
+        // call debbule function
+        //MatOfPoint2f fitDataPoints = debbule(positiveXEdge, positiveYEdge, negativeXEdge, negativeYEdge, win, isLeft);
+
+        //RotatedRect irisEllipse =  Imgproc.fitEllipse(fitDataPoints);
+        //return irisEllipse.center;
+        return mRgba_;
     }
 }
