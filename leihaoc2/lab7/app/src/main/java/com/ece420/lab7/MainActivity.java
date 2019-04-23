@@ -32,6 +32,8 @@ import org.opencv.tracking.TrackerMIL;
 import org.opencv.tracking.TrackerMedianFlow;
 
 import static org.opencv.core.Core.minMaxLoc;
+import static org.opencv.core.CvType.CV_16S;
+import static org.opencv.core.CvType.CV_8S;
 
 public class MainActivity extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2 {
 
@@ -459,36 +461,55 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         Rect irisRoi = new Rect((int) (ROI_.x), (int) ROI_.y, roiNewWidth, (int) ROI_.height);
         Mat irisImg = new Mat(mGray_, irisRoi); // reference to subarray
         Mat sobelImg = new Mat();
-        Imgproc.Sobel(irisImg, sobelImg, -1, 1, 0);
+        Imgproc.Sobel(irisImg, sobelImg, CV_16S, 1, 0);
         // local array of Points of negativeEdge and positiveEdge
-        double[] negativeXEdge = new double[negSampleNum];
-        double[] negativeYEdge = new double[negSampleNum];
-        double[] positiveXEdge = new double[posSampleNum];
-        double[] positiveYEdge = new double[posSampleNum];
+//        double[] negativeXEdge = new double[negSampleNum];
+//        double[] negativeYEdge = new double[negSampleNum];
+//        double[] positiveXEdge = new double[posSampleNum];
+//        double[] positiveYEdge = new double[posSampleNum];
+        Point[] EdgePoint = new Point[posSampleNum+negSampleNum];
+//        Point[] negEdgePoint = new Point[negSampleNum];
 
         // populate these array
-        for (int i = 0; i < negSampleNum; i++){
+//        int i = 0;
+//        for (; i < negSampleNum; i++){
+//            // bad run time
+//            Core.MinMaxLocResult tmp = minMaxLoc(sobelImg, null);
+//            sobelImg.put( (int) tmp.minLoc.y, (int) tmp.minLoc.x, 0); // 0 cannot be max or min
+//            EdgePoint[i] = tmp.minLoc;
+////            negativeXEdge[i] = tmp.minLoc.x;
+////            negativeYEdge[i] = tmp.minLoc.y;
+//            Imgproc.circle(mRgba_, new Point(tmp.minLoc.x + ROI_.x,tmp.minLoc.y + ROI_.y), 2, new Scalar(0,0,255));
+//        }
+//        for (int j = i; j < posSampleNum; j++){
+//            Core.MinMaxLocResult tmp = minMaxLoc(sobelImg, null);
+//            sobelImg.put( (int) tmp.maxLoc.y, (int) tmp.maxLoc.x, 0); // 0 cannot be max or min
+//            EdgePoint[j] = tmp.maxLoc;
+////            positiveXEdge[j] = tmp.maxLoc.x;
+////            positiveYEdge[j] = tmp.maxLoc.y;
+//            Imgproc.circle(mRgba_, new Point(tmp.maxLoc.x + ROI_.x,tmp.maxLoc.y + ROI_.y), 2, new Scalar(255,0,0));
+//        }
+        for (int i = 0; i+1 < negSampleNum+posSampleNum; i += 2){
             // bad run time
             Core.MinMaxLocResult tmp = minMaxLoc(sobelImg, null);
             sobelImg.put( (int) tmp.minLoc.y, (int) tmp.minLoc.x, 0); // 0 cannot be max or min
-            negativeXEdge[i] = tmp.minLoc.x;
-            negativeYEdge[i] = tmp.minLoc.y;
-            //Log.d(Double.toString(tmp.minLoc.x), "minLoc.x in sobelImg");
-        }
-        for (int j = 0; j < posSampleNum; j++){
-            Core.MinMaxLocResult tmp = minMaxLoc(sobelImg, null);
-            Log.d(Double.toString(tmp.maxVal), "maxVal in sobelImg");
             sobelImg.put( (int) tmp.maxLoc.y, (int) tmp.maxLoc.x, 0); // 0 cannot be max or min
-            positiveXEdge[j] = tmp.maxLoc.x;
-            positiveYEdge[j] = tmp.maxLoc.y;
-            Imgproc.circle(mRgba_, new Point(tmp.maxLoc.x + ROI_.x,tmp.maxLoc.y + ROI_.y), 2, new Scalar(0,0,255));
+            EdgePoint[i] = tmp.minLoc;
+            EdgePoint[i+1] = tmp.maxLoc;
+//            negativeXEdge[i] = tmp.minLoc.x;
+//            negativeYEdge[i] = tmp.minLoc.y;
+            Imgproc.circle(mRgba_, new Point(tmp.minLoc.x + ROI_.x,tmp.minLoc.y + ROI_.y), 1, new Scalar(0,0,255));
+            Imgproc.circle(mRgba_, new Point(tmp.maxLoc.x + ROI_.x,tmp.maxLoc.y + ROI_.y), 1, new Scalar(255,0,0));
         }
-
         // call debbule function
         //MatOfPoint2f fitDataPoints = debbule(positiveXEdge, positiveYEdge, negativeXEdge, negativeYEdge, win, isLeft);
-
-        //RotatedRect irisEllipse =  Imgproc.fitEllipse(fitDataPoints);
+        MatOfPoint2f fitDataPoints = new MatOfPoint2f();
+        Log.d(Integer.toString(EdgePoint.length), "Length of posEdgePt");
+        fitDataPoints.fromArray(EdgePoint);
+        RotatedRect irisEllipse =  Imgproc.fitEllipse(fitDataPoints);
         //return irisEllipse.center;
+        Imgproc.ellipse(mRgba_, new Point (irisEllipse.center.x + ROI_.x,  irisEllipse.center.y + ROI_.y), irisEllipse.size, irisEllipse.angle, 0,360  , new Scalar(255,255,0));
+        Imgproc.circle(mRgba_, new Point (irisEllipse.center.x + ROI_.x, irisEllipse.center.y + ROI_.y), 4, new Scalar(0,255,0));
         return mRgba_;
     }
 }
