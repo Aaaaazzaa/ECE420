@@ -30,17 +30,24 @@ import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.tracking.TrackerMIL;
 import org.opencv.tracking.TrackerMedianFlow;
-
+import org.opencv.xfeatures2d.SURF;
+import java.util.Arrays;
+import static org.opencv.core.Core.DECOMP_SVD;
 import static org.opencv.core.Core.minMaxLoc;
+import static org.opencv.core.Core.sumElems;
 import static org.opencv.core.CvType.CV_16S;
+import static org.opencv.core.CvType.CV_32F;
 import static org.opencv.core.CvType.CV_8S;
+import static org.opencv.core.CvType.CV_8SC1;
+import static org.opencv.core.CvType.CV_8U;
 
-public class MainActivity extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2 {
+public class MainActivity<i> extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2 {
 
     private static final String TAG = "MainActivity";
 
     // UI Variables
     private Button controlButton;
+    private Button confirmButton;
     private SeekBar colorSeekbar;
     private SeekBar widthSeekbar;
     private SeekBar heightSeekbar;
@@ -53,12 +60,19 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     private int myWidth;
     private int myHeight;
     //
-    int numCal = 9;
-    int[] xOutcome = new int[numCal];
-    int[] yOutcome = new int[numCal];
-    int[] xPredict = new int[numCal];
-    int[] yPredict = new int[numCal];
-
+    int numCal = 12;
+    int widthCal = 4;
+    int heightCal = 3;
+    int win = 90;
+    // TODO: use pointsCal directly
+//    int[] xOutcome = new int[numCal];
+//    int[] yOutcome = new int[numCal];
+//    int[] xPredict = new int[numCal];
+//    int[] yPredict = new int[numCal];
+    // array of all calibrate points
+    private Point[] pointsCal = new Point[numCal];
+    // generate
+    // row major order always
     // Mat to store RGBA and Grayscale camera preview frame
     private Mat mRgba;
     private Mat mGray;
@@ -149,20 +163,41 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                     widthSeekbar.setVisibility(View.INVISIBLE);
                     heightTextview.setVisibility(View.INVISIBLE);
                     heightSeekbar.setVisibility(View.INVISIBLE);
+
                     // Modify tracking flag
                     tracking_flag = 0;
                 }
-                else if(tracking_flag == 1){
+                else if(tracking_flag >= 1){
                     // Modify UI
                     controlButton.setText("START");
                     widthTextview.setVisibility(View.VISIBLE);
                     widthSeekbar.setVisibility(View.VISIBLE);
                     heightTextview.setVisibility(View.VISIBLE);
                     heightSeekbar.setVisibility(View.VISIBLE);
+                    confirmButton.setVisibility(View.VISIBLE);
                     // Tear down myTracker
                     myTacker.clear();
                     // Modify tracking flag
                     tracking_flag = -1;
+                }
+            }
+        });
+
+        // Setup control button
+        confirmButton = (Button)findViewById((R.id.confirmButton));
+        confirmButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (tracking_flag == -1) {
+
+                }
+                else if(tracking_flag >= 1 && tracking_flag <= numCal){
+                    // calibration state
+                    tracking_flag ++;
+                }
+                else{
+                    // operation state
+                    confirmButton.setVisibility(View.INVISIBLE);
                 }
             }
         });
@@ -274,6 +309,12 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                             myHeight / 2 - myROIHeight / 2,
                             myROIWidth,
                             myROIHeight);
+        for (int i = 0; i < widthCal; i++){
+            for (int j = 0; j < heightCal; j++){
+                pointsCal[i * heightCal + j] = new Point(300*i + 200, 200*j + 150);
+            }
+        }
+
     }
 
     @Override
@@ -289,9 +330,12 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         long start = Core.getTickCount();
         // Grab camera frame in rgba and grayscale format
         mRgba = inputFrame.rgba();
+        Core.flip(mRgba, mRgba, 1);
         // Grab camera frame in gray format
         mGray = inputFrame.gray();
+        Core.flip(mGray, mGray, 1);
         // Action based on tracking flag
+
 
         if(tracking_flag == -1){
             // Update myROI to keep the window to the center
@@ -306,42 +350,21 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
             // 2. Initialize KCF Tracker with grayscale image and ROI
             // 3. Modify tracking flag to start tracking
             // ******************** START YOUR CODE HERE ******************** //
-            myTacker = myTacker.create();
+            myTacker = TrackerMIL.create();
             myTacker.init(mGray, myROI);
             tracking_flag = 1;
 
 
             // ******************** END YOUR CODE HERE ******************** //
         }
-//        else if (tracking_flag <= numCal){
-//             // calibrate
-//            if(tracking_flag == 1){
-//                Point drawPt = new Point(100,100);
-//            }
-//            else if(tracking_flag == 2){
-//                Point drawPt = new Point(100,200);
-//            }
-//            else if(tracking_flag == 3){
-//                Point drawPt = new Point(100,300);
-//            }
-//            else if(tracking_flag == 4){
-//                Point drawPt = new Point(400,200);
-//            }
-//            else if(tracking_flag == 5){
-//                Point drawPt = new Point(400,200);
-//            }
-//            else if(tracking_flag == 5){
-//                Point drawPt = new Point(400,200);
-//            }
-//            else if(tracking_flag == 5){
-//                Point drawPt = new Point(400,200);
-//            }
-//            else if(tracking_flag == 5){
-//                Point drawPt = new Point(400,200);
-//            }
-//            Imgproc.putText(mRgba,"Calibrating: Please look at the point", new Point(50,50), Core.FONT_HERSHEY_PLAIN, 2, new Scalar(255,0,0));
-//        }
         else{
+            if (tracking_flag <= numCal){
+                Imgproc.putText(mRgba,"Calibrating: Please look at the point " + Integer.toString(tracking_flag-1), new Point(50,50), Core.FONT_HERSHEY_PLAIN, 3, new Scalar(255,0,0));
+                for (int i = 0; i < numCal; i++){
+                        Imgproc.circle(mRgba, pointsCal[i], 5 , new Scalar(0,0,0), 3);
+                }
+                Imgproc.circle(mRgba, pointsCal[tracking_flag-1], 5 , new Scalar(0,255,0), 3);
+            }
             // Update tracking result is succeed
             // If failed, print text "Tracking failure occurred!" at top left corner of the frame
             // Calculate and display "FPS@fps_value" at top right corner of the frame
@@ -350,21 +373,9 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
             if (!TrackingSuccess){
                 Imgproc.putText(mRgba,"Tracking Failure", new Point(50,50), Core.FONT_HERSHEY_PLAIN, 2, new Scalar(255,0,0));
             }
-//            Imgproc.circle(mRgba, new Point(200, 150),5 , new Scalar(0,255,0), 2);
-//            Imgproc.circle(mRgba, new Point(200, 350),5 , new Scalar(0,255,0), 2);
-//            Imgproc.circle(mRgba, new Point(200, 550),5 , new Scalar(0,255,0), 2);
-//            Imgproc.circle(mRgba, new Point(500, 150),5 , new Scalar(0,255,0), 2);
-//            Imgproc.circle(mRgba, new Point(500, 350),5 , new Scalar(0,255,0), 2);
-//            Imgproc.circle(mRgba, new Point(500, 550),5 , new Scalar(0,255,0), 2);
-//            Imgproc.circle(mRgba, new Point(800, 150),5 , new Scalar(0,255,0), 2);
-//            Imgproc.circle(mRgba, new Point(800, 350),5 , new Scalar(0,255,0), 2);
-//            Imgproc.circle(mRgba, new Point(800, 550),5 , new Scalar(0,255,0), 2);
-//            Imgproc.circle(mRgba, new Point(1100, 150),5 , new Scalar(0,255,0), 2);
-//            Imgproc.circle(mRgba, new Point(1100, 350),5 , new Scalar(0,255,0), 2);
-//            Imgproc.circle(mRgba, new Point(1100, 550),5 , new Scalar(0,255,0), 2);
             Point cornerPoint = eyeCorner(mGray, 0.30, myROI, true);
             Imgproc.circle(mRgba, cornerPoint, 4, new Scalar (0,255,0));
-            irisCenter(mGray, mRgba, 0.30, myROI, 50,50, 8, true);
+            irisCenter(mGray, mRgba, 0.30, myROI, 50,50, 8, true, cornerPoint);
             // ******************** END YOUR CODE HERE ******************** //
         }
 
@@ -376,11 +387,6 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                 );
 
         // Returned frame will be displayed on the screen
-
-//        Mat tmp = new Mat();
-//        Mat ret = new Mat();
-//        Imgproc.Sobel(mGray, tmp, -1, 1, 0);
-//        Core.absdiff(tmp, Scalar.all(0), ret);
         return mRgba;
     }
     // helper function
@@ -413,103 +419,172 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         Log.d( Double.toString(cornerAns.maxVal), "max val in c");
         return new Point (cornerAns.maxLoc.x + ROI_.x + ROI_.width - roiNewWidth, cornerAns.maxLoc.y + ROI_.y );
     }
-//    //
-//    public double[] BinCount(double[] arr){
-//        Core.MinMaxLocResult res = Core.minMaxLoc(arr);
-//        double max = res.maxVal;
-//        int h[] = new int[max+1];
-//        for(int i=0; i<arr.length; i++){
-//            h[arr[i]] += 1;
-//        }
-//        return h;
-//    }
-//
-//    // debubble function
-//    // remove noise
-//    public MatOfPoint2d debubble (Point[] postiveEdge, Point[] negativeEdge, int win, boolean isLeft){
-//        double[] countPos = BinCount(postiveEdge.x);
-//        Core.MinMaxLocationResult temp = Core.MinMaxLocationResult(countPos);
-//        int postiveEdgeMode = temp.maxLoc;
-//
-//        int[] countNeg = BinCount(negativeEdge.x);
-//        Core.MinMaxLocationResult temp = Core.MinMaxLocationResult(countNeg);
-//        int negativeEdgeMode = temp.maxLoc;
-//
-//        boolean[] truthArrayPostive = new boolean[postiveEdge.x.length]
-//        boolean[] truthArrayNegative = new boolean[negativeEdge.x.length]
-//
-//        for (int i=0; i<postiveEdge.x.length; i++){
-//            if ((postiveEdge.x[i] < postiveEdgeMode + win) && (postiveEdge.x[i] > postiveEdgeMode - win)){
-//                truthArrayPostive[i] = true;
-//            }
-//        }
-//
-//        for (int j=0; j<negativeEdge.x.length; j++){
-//            if((negativeEdge.x[i] < negativeEdgeMode + win) && (negativeEdge.x[i] > negativeEdgeMode - win)){
-//                truthArrayNegative[i] = true;
-//            }
-//        }
-//
-//    }
-//    //
-//    private MatOfPoint2f debbule(double[] positiveXEdge, double[] positiveYEdge, double[] negativeXEdge, double[] negativeYEdge,int win, boolean isLeft){
-//
-//        return new MatOfPoint2f();
-//    }
-    private Mat irisCenter(Mat mGray_, Mat mRgba_, double ratio, Rect2d ROI_, int negSampleNum, int posSampleNum, int win, boolean isLeft){
+    //
+    public int BinCount(int[] arr){
+        int len  = arr.length;
+        Arrays.sort(arr);
+        int max = arr[len-1];
+        int h[] = new int[max+1];
+        for(int i=0; i<arr.length; i++){
+            h[arr[i]] += 1;
+        }
+        int maxVal = 0;
+        int mode = 0 ;
+        for(int i = 0; i < h.length; i++){
+            if (h[i] > maxVal){
+                maxVal = h[i];
+                mode = i;
+            }
+        }
+        return mode;
+    }
+
+    private int debbule(int[] positiveXEdge, int[] positiveYEdge, int[] negativeXEdge, int[] negativeYEdge, Point[] EdgePoint, int win, boolean isLeft){
+        int posLen = positiveXEdge.length;
+        int negLen = negativeXEdge.length;
+        int pmode = BinCount(positiveXEdge);
+        int nmode = BinCount(negativeXEdge);
+        if (nmode > pmode && isLeft){
+            Log.e("error", "Iris edge failed, use right eye");
+        }
+        int cnt = 0;
+        for (int i = 0; i < posLen; i ++){
+            if (positiveXEdge[i] < pmode + win && positiveXEdge[i] > pmode - win){
+                Log.d("positiveXEdge[i]", Integer.toString(positiveXEdge[i]));
+                EdgePoint[cnt] = new Point (positiveXEdge[i], positiveYEdge[i]);
+
+                cnt ++;
+            }
+        }
+        for (int i = 0; i < negLen; i ++){
+            if (negativeXEdge[i] < nmode + win && negativeXEdge[i] > nmode - win){
+                EdgePoint[cnt] = new Point (negativeXEdge[i], negativeYEdge[i]);
+                cnt ++;
+            }
+        }
+        Log.d("EdgePoint has length", Integer.toString(cnt));
+        return cnt-1;
+    }
+
+
+
+    public float circlefit (Point[] data, Point[] center, int len){
+        // take mean
+        double xMean = 0;
+        double yMean = 0;
+        for (int i = 0; i < len; i++){
+            Log.d("inside circlefit", Integer.toString(i));
+            xMean += data[i].x;
+            yMean += data[i].y;
+        }
+        xMean /= len;
+        yMean /= len;
+        Log.d("xMean", Double.toString(xMean));
+        // u v is data - mean
+        double[] u = new double[len];
+        double[] v = new double[len];
+        for (int i = 0; i < len; i++){
+            u[i] = data[i].x - xMean;
+            v[i] = data[i].y - yMean;
+        }
+        // sum of quad arrays
+        double Suv = 0;
+        double Suu = 0;
+        double Svv = 0;
+        double[] uu = new double[len];
+        double[] vv = new double[len];
+        for (int i = 0; i < len; i++){
+            Suv += u[i] * v[i];
+            Suu += u[i] * u[i];
+            Svv += v[i] * v[i];
+            uu[i] = u[i] * u[i];
+            vv[i] = v[i] * v[i];
+        }
+        double SuuvSvvv = 0;
+        double SuuuSuvv = 0;
+        for (int i = 0; i < len; i++){
+            SuuvSvvv += uu[i] * v[i] + v[i] * vv[i];
+            SuuuSuvv += uu[i] * u[i] + u[i] * vv[i];
+        }
+        SuuuSuvv /= 2;
+        SuuvSvvv /= 2;
+        Mat A = new Mat(2,2, CvType.CV_32F);
+        Mat b = new Mat(2,1, CvType.CV_32F);
+        A.put(0,0,Suu);
+        A.put(0,1,Suv);
+        A.put(1,0,Suv);
+        A.put(1,1,Svv);
+        A.put(0,0,Suu);
+        b.put(0,0,SuuuSuvv);
+        b.put(1,0,SuuvSvvv);
+        Mat ans = new Mat();
+        boolean solveSuccess = Core.solve(A, b, ans, DECOMP_SVD);
+        if (!solveSuccess)
+            Log.e("error", "Fail to solve matrix in circleFitting");
+        double[] xc_1 = ans.get(0,0);
+        double[] yc_1 = ans.get(1,0);
+
+        xc_1[0] += xMean;
+        yc_1[0] += yMean;
+
+        Log.d("ans xc_1", Double.toString(xc_1[0]) );
+        Log.d("ans yc_1", Double.toString(yc_1[0]) );
+
+        Mat Ri_1 = new Mat(1, len, CV_32F);
+        for (int i = 0; i < len; i++){
+            Ri_1.put(0, i, (data[i].x - xc_1[0]) * (data[i].x - xc_1[0]) + (data[i].y - yc_1[0]) * (data[i].y - yc_1[0]));
+        }
+        Mat sqRi_1 = new Mat();
+        Core.sqrt(Ri_1, sqRi_1);
+        float R  = 0;
+        float[] tmp = new float[1];
+        for (int i = 0; i < len; i++){
+            sqRi_1.get(0, i, tmp);
+            R += tmp[0];
+        }
+        R /= len;
+        center[0] = new Point(xc_1[0], yc_1[0]);
+        return R;
+    }
+
+    private Mat irisCenter(Mat mGray_, Mat mRgba_, double ratio, Rect2d ROI_, int negSampleNum, int posSampleNum, int win, boolean isLeft, Point cornerPoint){
         int roiNewWidth = (int) (ROI_.width * (1 - ratio));
         Rect irisRoi = new Rect((int) (ROI_.x), (int) ROI_.y, roiNewWidth, (int) ROI_.height);
         Mat irisImg = new Mat(mGray_, irisRoi); // reference to subarray
         Mat sobelImg = new Mat();
         Imgproc.Sobel(irisImg, sobelImg, CV_16S, 1, 0);
-        // local array of Points of negativeEdge and positiveEdge
-//        double[] negativeXEdge = new double[negSampleNum];
-//        double[] negativeYEdge = new double[negSampleNum];
-//        double[] positiveXEdge = new double[posSampleNum];
-//        double[] positiveYEdge = new double[posSampleNum];
-        Point[] EdgePoint = new Point[posSampleNum+negSampleNum];
-//        Point[] negEdgePoint = new Point[negSampleNum];
-
-        // populate these array
-//        int i = 0;
-//        for (; i < negSampleNum; i++){
-//            // bad run time
-//            Core.MinMaxLocResult tmp = minMaxLoc(sobelImg, null);
-//            sobelImg.put( (int) tmp.minLoc.y, (int) tmp.minLoc.x, 0); // 0 cannot be max or min
-//            EdgePoint[i] = tmp.minLoc;
-////            negativeXEdge[i] = tmp.minLoc.x;
-////            negativeYEdge[i] = tmp.minLoc.y;
-//            Imgproc.circle(mRgba_, new Point(tmp.minLoc.x + ROI_.x,tmp.minLoc.y + ROI_.y), 2, new Scalar(0,0,255));
-//        }
-//        for (int j = i; j < posSampleNum; j++){
-//            Core.MinMaxLocResult tmp = minMaxLoc(sobelImg, null);
-//            sobelImg.put( (int) tmp.maxLoc.y, (int) tmp.maxLoc.x, 0); // 0 cannot be max or min
-//            EdgePoint[j] = tmp.maxLoc;
-////            positiveXEdge[j] = tmp.maxLoc.x;
-////            positiveYEdge[j] = tmp.maxLoc.y;
-//            Imgproc.circle(mRgba_, new Point(tmp.maxLoc.x + ROI_.x,tmp.maxLoc.y + ROI_.y), 2, new Scalar(255,0,0));
-//        }
-        for (int i = 0; i+1 < negSampleNum+posSampleNum; i += 2){
+        //populate these array
+        int[] negativeXEdge = new int[negSampleNum];
+        int[] negativeYEdge = new int[negSampleNum];
+        int[] positiveXEdge = new int[posSampleNum];
+        int[] positiveYEdge = new int[posSampleNum];
+        for (int i = 0; i < negSampleNum; i++){
             // bad run time
             Core.MinMaxLocResult tmp = minMaxLoc(sobelImg, null);
             sobelImg.put( (int) tmp.minLoc.y, (int) tmp.minLoc.x, 0); // 0 cannot be max or min
-            sobelImg.put( (int) tmp.maxLoc.y, (int) tmp.maxLoc.x, 0); // 0 cannot be max or min
-            EdgePoint[i] = tmp.minLoc;
-            EdgePoint[i+1] = tmp.maxLoc;
-//            negativeXEdge[i] = tmp.minLoc.x;
-//            negativeYEdge[i] = tmp.minLoc.y;
-            Imgproc.circle(mRgba_, new Point(tmp.minLoc.x + ROI_.x,tmp.minLoc.y + ROI_.y), 1, new Scalar(0,0,255));
-            Imgproc.circle(mRgba_, new Point(tmp.maxLoc.x + ROI_.x,tmp.maxLoc.y + ROI_.y), 1, new Scalar(255,0,0));
+            negativeXEdge[i] = (int) (tmp.minLoc.x);
+            negativeYEdge[i] = (int) (tmp.minLoc.y);
         }
-        // call debbule function
-        //MatOfPoint2f fitDataPoints = debbule(positiveXEdge, positiveYEdge, negativeXEdge, negativeYEdge, win, isLeft);
-        MatOfPoint2f fitDataPoints = new MatOfPoint2f();
-        Log.d(Integer.toString(EdgePoint.length), "Length of posEdgePt");
-        fitDataPoints.fromArray(EdgePoint);
-        RotatedRect irisEllipse =  Imgproc.fitEllipse(fitDataPoints);
-        //return irisEllipse.center;
-        Imgproc.ellipse(mRgba_, new Point (irisEllipse.center.x + ROI_.x,  irisEllipse.center.y + ROI_.y), irisEllipse.size, irisEllipse.angle, 0,360  , new Scalar(255,255,0));
-        Imgproc.circle(mRgba_, new Point (irisEllipse.center.x + ROI_.x, irisEllipse.center.y + ROI_.y), 4, new Scalar(0,255,0));
+        for (int j = 0; j < posSampleNum; j++){
+            Core.MinMaxLocResult tmp = minMaxLoc(sobelImg, null);
+            sobelImg.put( (int) tmp.maxLoc.y, (int) tmp.maxLoc.x, 0); // 0 cannot be max or min
+            positiveXEdge[j] = (int) (tmp.maxLoc.x);
+            Log.d("get sobel", Integer.toString(positiveXEdge[j]));
+            positiveYEdge[j] = (int) (tmp.maxLoc.y);
+        }
+        Point[] EdgePoint = new Point[negSampleNum+posSampleNum];
+        Point[] center = new Point[1];
+        int validPoints = debbule(positiveXEdge, positiveYEdge, negativeXEdge, negativeYEdge, EdgePoint, win, true);
+        for (int i = 0; i < validPoints; i++){
+            Imgproc.circle(mRgba_, new Point (EdgePoint[i].x + ROI_.x, EdgePoint[i].y + ROI_.y), 1, new Scalar(0,255,255));
+        }
+        Log.d("Return, length", Integer.toString(EdgePoint.length));
+        float radius = circlefit(EdgePoint, center, validPoints);
+        Imgproc.circle(mRgba_, new Point (center[0].x + ROI_.x, center[0].y + ROI_.y), (int) (radius), new Scalar(0,255,0));
+        Imgproc.circle(mRgba_, new Point (center[0].x + ROI_.x, center[0].y + ROI_.y), 4, new Scalar(0,0,255));
+        Imgproc.circle(mRgba_, new Point (100 * (cornerPoint.x - center[0].x - ROI_.x) + 200, -50 * (cornerPoint.y - center[0].y + ROI_.y) + 1000), 18, new Scalar(153,51,255));
+        Log.d("cursor x", Integer.toString((int) (100 * (cornerPoint.x - center[0].x - ROI_.x) + 200)));
+        Log.d("cursor y", Integer.toString((int) (-50 * (cornerPoint.y - center[0].y + ROI_.y) + 1000)));
         return mRgba_;
     }
 }

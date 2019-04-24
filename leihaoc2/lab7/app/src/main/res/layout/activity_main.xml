@@ -22,9 +22,9 @@
         android:layout_height="wrap_content"
         android:layout_alignParentEnd="true"
         android:layout_alignParentTop="true"
-        android:layout_marginTop="50dp"
+        android:layout_marginTop="20dp"
         android:width="130dp"
-        android:height="60dp"
+        android:height="50dp"
         android:text="@string/control_button" />
 
     <TextView
@@ -34,7 +34,7 @@
         android:layout_alignParentEnd="true"
         android:layout_alignStart="@+id/controlButton"
         android:layout_below="@+id/controlButton"
-        android:layout_marginTop="50dp"
+        android:layout_marginTop="90dp"
         android:text="Window Color"
         android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
 
@@ -55,7 +55,7 @@
         android:layout_alignParentEnd="true"
         android:layout_alignStart="@+id/controlButton"
         android:layout_below="@+id/colorSeekBar"
-        android:layout_marginTop="30dp"
+        android:layout_marginTop="10dp"
         android:text="Window Width"
         android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
 
@@ -89,5 +89,16 @@
         android:layout_below="@+id/heightTextView"
         android:layout_marginTop="10dp"
         android:max="480" />
+
+    <Button
+        android:id="@+id/confirmButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"
+        android:layout_marginTop="80dp"
+        android:width="130dp"
+        android:height="50dp"
+        android:text="confirm" />
 
 </RelativeLayout>
