@@ -65,12 +65,12 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
     int heightCal = 3;
     int win = 90;
     // TODO: use pointsCal directly
-//    int[] xOutcome = new int[numCal];
-//    int[] yOutcome = new int[numCal];
-//    int[] xPredict = new int[numCal];
-//    int[] yPredict = new int[numCal];
+    int[] xOutcome = new int[numCal];
+    int[] yOutcome = new int[numCal];
+    int[] xPredict = new int[numCal];
+    int[] yPredict = new int[numCal];
     // array of all calibrate points
-    private Point[] pointsCal = new Point[numCal];
+    //private Point[] pointsCal = new Point[numCal];
     // generate
     // row major order always
     // Mat to store RGBA and Grayscale camera preview frame
@@ -311,7 +311,8 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
                             myROIHeight);
         for (int i = 0; i < widthCal; i++){
             for (int j = 0; j < heightCal; j++){
-                pointsCal[i * heightCal + j] = new Point(300*i + 200, 200*j + 150);
+                xOutcome[i * heightCal + j] = 300*i + 200;
+                yOutcome[i * heightCal + j] = 200*j + 150;
             }
         }
 
@@ -330,17 +331,17 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
         long start = Core.getTickCount();
         // Grab camera frame in rgba and grayscale format
         mRgba = inputFrame.rgba();
-        Core.flip(mRgba, mRgba, 1);
+        //Core.flip(mRgba, mRgba, 1);
         // Grab camera frame in gray format
         mGray = inputFrame.gray();
-        Core.flip(mGray, mGray, 1);
+        //Core.flip(mGray, mGray, 1);
         // Action based on tracking flag
 
 
         if(tracking_flag == -1){
             // Update myROI to keep the window to the center
-            myROI.x = myWidth / 2 - myROIWidth / 2;
-            myROI.y = myHeight / 2 - myROIHeight / 2;
+            myROI.x = myWidth / 3 - myROIWidth / 2;
+            myROI.y = myHeight * 2 / 5 - myROIHeight / 2;
             myROI.width = myROIWidth;
             myROI.height = myROIHeight;
         }
@@ -359,11 +360,11 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
         }
         else{
             if (tracking_flag <= numCal){
-                Imgproc.putText(mRgba,"Calibrating: Please look at the point " + Integer.toString(tracking_flag-1), new Point(50,50), Core.FONT_HERSHEY_PLAIN, 3, new Scalar(255,0,0));
+                Imgproc.putText(mRgba,"Calibrating: Please look at the point " + Integer.toString(tracking_flag-1), new Point(50,50), Core.FONT_HERSHEY_PLAIN, 3, new Scalar(255,0,0), 2);
                 for (int i = 0; i < numCal; i++){
-                        Imgproc.circle(mRgba, pointsCal[i], 5 , new Scalar(0,0,0), 3);
+                        Imgproc.circle(mRgba, new Point(xOutcome[i], yOutcome[i]), 5 , new Scalar(0,0,0), 3);
                 }
-                Imgproc.circle(mRgba, pointsCal[tracking_flag-1], 5 , new Scalar(0,255,0), 3);
+                Imgproc.circle(mRgba, new Point(xOutcome[tracking_flag-1], yOutcome[tracking_flag-1]), 5 , new Scalar(0,255,0), 3);
             }
             // Update tracking result is succeed
             // If failed, print text "Tracking failure occurred!" at top left corner of the frame
@@ -444,15 +445,24 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
         int negLen = negativeXEdge.length;
         int pmode = BinCount(positiveXEdge);
         int nmode = BinCount(negativeXEdge);
+        int cnt = 0;
         if (nmode > pmode && isLeft){
             Log.e("error", "Iris edge failed, use right eye");
+            // don't debbule
+            for(int i = 0; i < posLen; i ++){
+                EdgePoint[cnt] = new Point (positiveXEdge[i], positiveYEdge[i]);
+                cnt ++;
+            }
+            for (int i = 0; i < negLen; i ++){
+                EdgePoint[cnt] = new Point (negativeXEdge[i], negativeYEdge[i]);
+                cnt ++;
+            }
+            return cnt-1;
         }
-        int cnt = 0;
         for (int i = 0; i < posLen; i ++){
             if (positiveXEdge[i] < pmode + win && positiveXEdge[i] > pmode - win){
-                Log.d("positiveXEdge[i]", Integer.toString(positiveXEdge[i]));
+                //Log.d("positiveXEdge[i]", Integer.toString(positiveXEdge[i]));
                 EdgePoint[cnt] = new Point (positiveXEdge[i], positiveYEdge[i]);
-
                 cnt ++;
             }
         }
@@ -462,11 +472,9 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
                 cnt ++;
             }
         }
-        Log.d("EdgePoint has length", Integer.toString(cnt));
+        //Log.d("EdgePoint has length", Integer.toString(cnt));
         return cnt-1;
     }
-
-
 
     public float circlefit (Point[] data, Point[] center, int len){
         // take mean
@@ -582,9 +590,11 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
         float radius = circlefit(EdgePoint, center, validPoints);
         Imgproc.circle(mRgba_, new Point (center[0].x + ROI_.x, center[0].y + ROI_.y), (int) (radius), new Scalar(0,255,0));
         Imgproc.circle(mRgba_, new Point (center[0].x + ROI_.x, center[0].y + ROI_.y), 4, new Scalar(0,0,255));
-        Imgproc.circle(mRgba_, new Point (100 * (cornerPoint.x - center[0].x - ROI_.x) + 200, -50 * (cornerPoint.y - center[0].y + ROI_.y) + 1000), 18, new Scalar(153,51,255));
-        Log.d("cursor x", Integer.toString((int) (100 * (cornerPoint.x - center[0].x - ROI_.x) + 200)));
-        Log.d("cursor y", Integer.toString((int) (-50 * (cornerPoint.y - center[0].y + ROI_.y) + 1000)));
+        Imgproc.circle(mRgba_, new Point (10 * (cornerPoint.x - center[0].x - ROI_.x) + 20, -5 * (cornerPoint.y - center[0].y - ROI_.y) + 200), 15, new Scalar(153,51,255), 3);
+        Imgproc.putText(mRgba_,"Gaze vector = [" + Integer.toString((int) (cornerPoint.x - center[0].x - ROI_.x)) + " , " + Integer.toString((int)(cornerPoint.y - center[0].y - ROI_.y)) + " ]", new Point(50,100), Core.FONT_HERSHEY_PLAIN, 3, new Scalar(0,0,255), 2);
+
+        Log.d("cursor x", Integer.toString((int) (10 * (cornerPoint.x - center[0].x - ROI_.x) + 20)));
+        Log.d("cursor y", Integer.toString((int) (-5 * (cornerPoint.y - center[0].y - ROI_.y) + 200)));
         return mRgba_;
     }
 }
