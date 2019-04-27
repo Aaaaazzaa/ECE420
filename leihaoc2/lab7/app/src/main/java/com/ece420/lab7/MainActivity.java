@@ -1,9 +1,12 @@
 package com.ece420.lab7;
 
+import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.Manifest;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -11,6 +14,7 @@ import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
@@ -27,6 +31,7 @@ import org.opencv.core.Rect;
 import org.opencv.core.Rect2d;
 import org.opencv.core.RotatedRect;
 import org.opencv.core.Scalar;
+import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.tracking.TrackerMIL;
 import org.opencv.tracking.TrackerMedianFlow;
@@ -48,6 +53,7 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
     // UI Variables
     private Button controlButton;
     private Button confirmButton;
+    private Button openButton;
     private SeekBar colorSeekbar;
     private SeekBar widthSeekbar;
     private SeekBar heightSeekbar;
@@ -60,8 +66,8 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
     private int myWidth;
     private int myHeight;
     //
-    int numCal = 12;
-    int widthCal = 4;
+    int numCal = 9;
+    int widthCal = 3;
     int heightCal = 3;
     int win = 90;
     // TODO: use pointsCal directly
@@ -69,6 +75,12 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
     int[] yOutcome = new int[numCal];
     int[] xPredict = new int[numCal];
     int[] yPredict = new int[numCal];
+    // use xPair and yPair to line regression
+    private Mat xPair; // CV_16S
+    private Mat yPair;
+    private Mat xParam;
+    private Mat yParam;
+    private Point cornerPoint;
     // array of all calibrate points
     //private Point[] pointsCal = new Point[numCal];
     // generate
@@ -84,6 +96,9 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
     private int myROIHeight = 70;
     private Scalar myROIColor = new Scalar(0,0,0);
     private int tracking_flag = -1;
+    private static final int PICK_IMAGE = 100;
+    Uri imageUri;
+    ImageView imageView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -198,6 +213,7 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
                 else{
                     // operation state
                     confirmButton.setVisibility(View.INVISIBLE);
+                    tracking_flag = -2;
                 }
             }
         });
@@ -209,6 +225,30 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
         // Force camera resolution, ignored since OpenCV automatically select best ones
         // mOpenCvCameraView.setMaxFrameSize(1280, 720);
         mOpenCvCameraView.setCvCameraViewListener(this);
+
+        imageView = (ImageView) findViewById(R.id.imageView);
+        openButton = (Button) findViewById(R.id.buttonOpen);
+        openButton.setOnClickListener( new View.OnClickListener(){
+            @Override
+            public void onClick(View v){
+                openGallery();
+                tracking_flag = -2;
+                mOpenCvCameraView.setAlpha(.7f);
+            }
+        });
+
+    }
+    private void openGallery() {
+        Intent gallery = new Intent (Intent.ACTION_PICK, MediaStore.Images.Media.INTERNAL_CONTENT_URI);
+        startActivityForResult( gallery, PICK_IMAGE);
+    }
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data){
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode == RESULT_OK && requestCode == PICK_IMAGE){
+            imageUri = data.getData();
+            imageView.setImageURI(imageUri);
+        }
     }
 
     @Override
@@ -305,6 +345,13 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
         mGray = new Mat(height, width, CvType.CV_8SC1);
         myWidth = width;
         myHeight = height;
+        xPair = new Mat(numCal, 2, 3);
+        yPair = new Mat(numCal, 2, 3);
+        if (tracking_flag != -2 ) {
+            xParam = new Mat();
+            yParam = new Mat();
+        }
+        cornerPoint = new Point();
         myROI = new Rect2d(myWidth / 2 - myROIWidth / 2,
                             myHeight / 2 - myROIHeight / 2,
                             myROIWidth,
@@ -312,7 +359,9 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
         for (int i = 0; i < widthCal; i++){
             for (int j = 0; j < heightCal; j++){
                 xOutcome[i * heightCal + j] = 300*i + 200;
+                xPair.put(i * heightCal + j, 1, 300*i + 200);
                 yOutcome[i * heightCal + j] = 200*j + 150;
+                yPair.put(i * heightCal + j, 1, 200*j + 150);
             }
         }
 
@@ -329,6 +378,7 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
 
         // Timer
         long start = Core.getTickCount();
+
         // Grab camera frame in rgba and grayscale format
         mRgba = inputFrame.rgba();
         //Core.flip(mRgba, mRgba, 1);
@@ -352,6 +402,7 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
             // 3. Modify tracking flag to start tracking
             // ******************** START YOUR CODE HERE ******************** //
             myTacker = TrackerMIL.create();
+            cornerPoint = eyeCorner(mGray, 0.25, myROI, true);
             myTacker.init(mGray, myROI);
             tracking_flag = 1;
 
@@ -359,25 +410,61 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
             // ******************** END YOUR CODE HERE ******************** //
         }
         else{
-            if (tracking_flag <= numCal){
-                Imgproc.putText(mRgba,"Calibrating: Please look at the point " + Integer.toString(tracking_flag-1), new Point(50,50), Core.FONT_HERSHEY_PLAIN, 3, new Scalar(255,0,0), 2);
-                for (int i = 0; i < numCal; i++){
-                        Imgproc.circle(mRgba, new Point(xOutcome[i], yOutcome[i]), 5 , new Scalar(0,0,0), 3);
-                }
-                Imgproc.circle(mRgba, new Point(xOutcome[tracking_flag-1], yOutcome[tracking_flag-1]), 5 , new Scalar(0,255,0), 3);
-            }
+
             // Update tracking result is succeed
             // If failed, print text "Tracking failure occurred!" at top left corner of the frame
             // Calculate and display "FPS@fps_value" at top right corner of the frame
             // ******************** START YOUR CODE HERE ******************** //
-            TrackingSuccess = myTacker.update(mGray, myROI);
-            if (!TrackingSuccess){
+            //TrackingSuccess = myTacker.update(mGray, myROI);
+            //if (!TrackingSuccess){
                 Imgproc.putText(mRgba,"Tracking Failure", new Point(50,50), Core.FONT_HERSHEY_PLAIN, 2, new Scalar(255,0,0));
-            }
-            Point cornerPoint = eyeCorner(mGray, 0.30, myROI, true);
+            //}
+            //Point cornerPoint = eyeCorner(mGray, 0.25, myROI, true);
             Imgproc.circle(mRgba, cornerPoint, 4, new Scalar (0,255,0));
-            irisCenter(mGray, mRgba, 0.30, myROI, 50,50, 8, true, cornerPoint);
+            Point gazeVec = irisCenter(mGray, mRgba, 0.30, myROI, 50,50, 8, true, cornerPoint);
+
             // ******************** END YOUR CODE HERE ******************** //
+//            if (tracking_flag == -2){
+//                for (int i = 0; i < myWidth; i++){
+//                    for (int j = 0; j < myHeight; j++){
+//                        mRgba.put(i,j,0,0,0,128);
+//                    }
+//                }
+//            }
+            if (tracking_flag <= numCal && tracking_flag >= 1){
+                Imgproc.putText(mRgba,"Calibrating: Please look at the point " + Integer.toString(tracking_flag-1), new Point(50,50), Core.FONT_HERSHEY_PLAIN, 3, new Scalar(255,0,0), 2);
+                for (int i = 0; i < numCal; i++){
+                    Imgproc.circle(mRgba, new Point(xOutcome[i], yOutcome[i]), 5 , new Scalar(0,0,0), 3);
+                }
+                Imgproc.circle(mRgba, new Point(xOutcome[tracking_flag-1], yOutcome[tracking_flag-1]), 5 , new Scalar(0,255,0), 3);
+                xPair.put(tracking_flag-1,0, gazeVec.x);
+                yPair.put(tracking_flag-1,0, gazeVec.y);
+                Log.d("Point captured at " + Integer.toString(tracking_flag-1) + ':', Double.toString(gazeVec.x) + Double.toString(gazeVec.y));
+
+
+            }
+            else if (tracking_flag == numCal+1) {
+                // line regression
+                Imgproc.fitLine(xPair, xParam, Imgproc.CV_DIST_L2, 0, .01, .01);
+                Imgproc.fitLine(yPair, yParam, Imgproc.CV_DIST_L2, 0, .01, .01);
+                //Log.d("tracking_flag", Integer.toString(tracking_flag));
+                tracking_flag ++;
+            }
+
+            else if (tracking_flag > numCal+1) {
+                Point cursor =  new Point(  xParam.get(3,0)[0] + xParam.get(1,0)[0] / xParam.get(0,0)[0] * (gazeVec.x - xParam.get(2,0)[0]),
+                        yParam.get(3,0)[0] + yParam.get(1,0)[0] / yParam.get(0,0)[0] * (gazeVec.y - yParam.get(2,0)[0]) );
+                Imgproc.circle(mRgba, cursor, 15, new Scalar(153,51,255), 3);
+                Log.d("cursorx", Double.toString(cursor.x));
+                Log.d("cursory", Double.toString(cursor.y));
+
+                //Log.d("tracking_flag", Integer.toString(tracking_flag));
+//                for (int i = 0; i < 4; i++){
+//                    Log.d("xparam " + Integer.toString(i)+ " = ", Double.toString( xParam.get(i,0)[0] ));
+//                }
+            }
+            //
+            // Log.d("tracking_flag", Integer.toString(tracking_flag));
         }
 
         // Draw a rectangle on to the current frame
@@ -388,6 +475,7 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
                 );
 
         // Returned frame will be displayed on the screen
+        Log.d("alpha channel of mRgba", Double.toString(mRgba.get(0,0)[3]));
         return mRgba;
     }
     // helper function
@@ -555,7 +643,7 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
         return R;
     }
 
-    private Mat irisCenter(Mat mGray_, Mat mRgba_, double ratio, Rect2d ROI_, int negSampleNum, int posSampleNum, int win, boolean isLeft, Point cornerPoint){
+    private Point irisCenter(Mat mGray_, Mat mRgba_, double ratio, Rect2d ROI_, int negSampleNum, int posSampleNum, int win, boolean isLeft, Point cornerPoint){
         int roiNewWidth = (int) (ROI_.width * (1 - ratio));
         Rect irisRoi = new Rect((int) (ROI_.x), (int) ROI_.y, roiNewWidth, (int) ROI_.height);
         Mat irisImg = new Mat(mGray_, irisRoi); // reference to subarray
@@ -590,11 +678,17 @@ public class MainActivity<i> extends AppCompatActivity implements CameraBridgeVi
         float radius = circlefit(EdgePoint, center, validPoints);
         Imgproc.circle(mRgba_, new Point (center[0].x + ROI_.x, center[0].y + ROI_.y), (int) (radius), new Scalar(0,255,0));
         Imgproc.circle(mRgba_, new Point (center[0].x + ROI_.x, center[0].y + ROI_.y), 4, new Scalar(0,0,255));
-        Imgproc.circle(mRgba_, new Point (10 * (cornerPoint.x - center[0].x - ROI_.x) + 20, -5 * (cornerPoint.y - center[0].y - ROI_.y) + 200), 15, new Scalar(153,51,255), 3);
+        // original mapping
+//        Imgproc.circle(mRgba_, new Point (10 * (cornerPoint.x - center[0].x - ROI_.x) + 20, -5 * (cornerPoint.y - center[0].y - ROI_.y) + 200), 15, new Scalar(153,51,255), 3);
+
+        //Mat gazeX = new Mat(12, 1, CV_16S);
+        //gazeX.put ()
+
+
         Imgproc.putText(mRgba_,"Gaze vector = [" + Integer.toString((int) (cornerPoint.x - center[0].x - ROI_.x)) + " , " + Integer.toString((int)(cornerPoint.y - center[0].y - ROI_.y)) + " ]", new Point(50,100), Core.FONT_HERSHEY_PLAIN, 3, new Scalar(0,0,255), 2);
 
-        Log.d("cursor x", Integer.toString((int) (10 * (cornerPoint.x - center[0].x - ROI_.x) + 20)));
-        Log.d("cursor y", Integer.toString((int) (-5 * (cornerPoint.y - center[0].y - ROI_.y) + 200)));
-        return mRgba_;
+        //Log.d("cursor x", Integer.toString((int) (10 * (cornerPoint.x - center[0].x - ROI_.x) + 20)));
+        //Log.d("cursor y", Integer.toString((int) (-5 * (cornerPoint.y - center[0].y - ROI_.y) + 200)));
+        return new Point(cornerPoint.x - center[0].x - ROI_.x, cornerPoint.y - center[0].y - ROI_.y);
     }
 }
